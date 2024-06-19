@@ -92,7 +92,7 @@ jobs:
         with:
           name: legado_app_${{ env.VERSION }}
           tag_name: ${{ env.VERSION }}
-          body_path: update apk
+          body_path: "update apk"
           draft: false
           prerelease: false
           files: ${{ github.workspace }}/apk/legado_app_*.apk
