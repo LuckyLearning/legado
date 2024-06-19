@@ -92,49 +92,9 @@ jobs:
         with:
           name: legado_app_${{ env.VERSION }}
           tag_name: ${{ env.VERSION }}
-          body_path: ${{ github.workspace }}/CHANGELOG.md
+          body_path: update apk
           draft: false
           prerelease: false
           files: ${{ github.workspace }}/apk/legado_app_*.apk
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Prepare For GooglePlay
-        if: env.product == 'google' && env.play == 'yes'
-        run: |
-          mkdir -p ReleaseNotes
-          ln -s ${{ github.workspace }}/CHANGELOG.md ReleaseNotes/whatsnew-en-US
-          ln -s ${{ github.workspace }}/CHANGELOG.md ReleaseNotes/whatsnew-zh-CN
-
-      - name: Release To GooglePlay
-        if: env.product == 'google' && env.play == 'yes'
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT_JSON }}
-          packageName: io.legado.play
-          releaseFiles: ${{ github.workspace }}/apk/legado_google_*.apk
-          track: production
-          whatsNewDirectory: ${{ github.workspace }}/ReleaseNotes
-
-      - name: Push Assets To "release" Branch
-        if: ${{ github.actor == 'LuckyLearning' }}
-        run: |
-          cd $GITHUB_WORKSPACE/apk/
-          git init
-          git checkout -b release
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git remote add origin "https://${{ github.actor }}:${{ secrets.ACTIONS_TOKEN }}@github.com/${{ github.actor }}/release"
-          git add *.apk
-          git commit -m "${{ env.VERSION }}"
-          git push -f -u origin release
-          
-      - name: Purge Jsdelivr Cache
-        if: ${{ github.actor == 'LuckyLearning' }}
-        run: |
-          result=$(curl -s https://purge.jsdelivr.net/gh/${{ github.actor }}/release@release/)
-          if echo $result |grep -q 'success.*true'; then
-            echo "jsdelivr缓存更新成功"
-          else
-            echo $result
-          fi
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}      
