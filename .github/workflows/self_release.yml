@@ -67,19 +67,19 @@ jobs:
       - name: Organize the Files
         run: |
           mkdir -p ${{ github.workspace }}/apk/
-          find ${{ github.workspace }}/app/build/outputs/apk -name "*.apk" -exec cp {} ${{ github.workspace }}/apk/legado.apk \;
+          cp -rf ${{ github.workspace }}/app/build/outputs/apk/*/*/*.apk ${{ github.workspace }}/apk/
           
       - name: Upload App To Artifact
         uses: actions/upload-artifact@v4
         with:
           name: legado_${{ env.product }}
-          path: ${{ github.workspace }}/apk/legado.apk
+          path: ${{ github.workspace }}/apk/*.apk
     
       - name: Commit APK file
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add ${{ github.workspace }}/apk/legado.apk
+          git add ${{ github.workspace }}/apk/*.apk
           git commit -m "Auto commit APK file for version ${{ env.VERSION }}"
           git push
 
@@ -92,7 +92,7 @@ jobs:
           body: update
           draft: false
           prerelease: false
-          files: ${{ github.workspace }}/apk/legado.apk
+          files: ${{ github.workspace }}/apk/legado_app_*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           

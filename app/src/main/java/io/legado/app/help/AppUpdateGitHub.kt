@@ -17,7 +17,8 @@ import splitties.init.appCtx
 @Suppress("unused")
 object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
 
-    private const val GITHUB_RELEASE_URL = "https://api.github.com/repos/LuckyLearning/legado/releases/latest"
+    private const val GITHUB_RELEASE_URL =
+        "https://api.github.com/repos/LuckyLearning/legado/releases/latest"
     private const val TIMEOUT_DURATION = 10_000L
 
     override fun check(scope: CoroutineScope): Coroutine<AppUpdate.UpdateInfo> {
@@ -41,7 +42,9 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
                     ?: throw NoStackTraceException("获取新版本失败，更新内容为空")
 
                 val path = "\$.assets[?(@.name =~ /legado_${appCtx.channel}_.*?apk\$/)]"
-                val downloadUrl = "https://cdn.jsdelivr.net/gh/LuckyLearning/legado@latest/apk/legado.apk"
+
+                val downloadUrl =
+                    "https://cdn.jsdelivr.net/gh/LuckyLearning/legado@latest/apk/legado_app_$tagName.apk"
 
                 val fileName = rootDoc.read<List<String>>("${path}.name").firstOrNull()
                     ?: throw NoStackTraceException("获取新版本失败，文件名为空")
