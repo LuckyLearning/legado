@@ -1,0 +1,98 @@
+name: Release Build Update
+
+on:
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    outputs:
+      version: ${{ steps.set-ver.outputs.version }}
+      sign: ${{ steps.check.outputs.sign }}
+    steps:
+      - id: set-ver
+        run: |
+          echo "version=$(date -d "8 hour" -u +3.%y.%m%d%H)" >> $GITHUB_OUTPUT
+      - id: check
+        run: |
+          if [ ! -z "${{ secrets.RELEASE_KEY_STORE }}" ]; then
+            echo "sign=yes" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: prepare
+    if: ${{ needs.prepare.outputs.sign }}
+    strategy:
+      matrix:
+        product: [ app ]
+      fail-fast: false
+    runs-on: ubuntu-latest
+    env:
+      product: ${{ matrix.product }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      play: ${{ needs.prepare.outputs.play }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 17
+
+      - name: Release Apk Sign
+        run: |
+          echo -e "\n" >> gradle.properties
+          echo RELEASE_KEY_ALIAS='${{ secrets.RELEASE_KEY_ALIAS }}' >> gradle.properties
+          echo RELEASE_KEY_PASSWORD='${{ secrets.RELEASE_KEY_PASSWORD }}' >> gradle.properties
+          echo RELEASE_STORE_PASSWORD='${{ secrets.RELEASE_STORE_PASSWORD }}' >> gradle.properties
+          echo RELEASE_STORE_FILE='./key.jks' >> gradle.properties
+          echo ${{ secrets.RELEASE_KEY_STORE }} | base64 --decode > $GITHUB_WORKSPACE/app/key.jks
+
+      - name: Unify Version Name
+        run: |
+          echo "统一版本号"
+          sed "/def version/c def version = \"${{ env.VERSION }}\"" $GITHUB_WORKSPACE/app/build.gradle  -i
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Build With Gradle
+        run: |
+          echo "开始进行${{ env.product }}构建"
+          chmod +x gradlew
+          ./gradlew assemble${{ env.product }}release --build-cache --parallel --daemon --warning-mode all
+
+      - name: Organize the Files
+        run: |
+          mkdir -p ${{ github.workspace }}/apk/
+          find ${{ github.workspace }}/app/build/outputs/apk -name "*.apk" -exec cp {} ${{ github.workspace }}/apk/legado.apk \;
+          
+      - name: Upload App To Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: legado_${{ env.product }}
+          path: ${{ github.workspace }}/apk/legado.apk
+
+      - name: Release
+        if: ${{ env.product == 'app' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          name: legado_app_${{ env.VERSION }}
+          tag_name: ${{ env.VERSION }}
+          body_path: ${{ github.workspace }}/CHANGELOG.md
+          draft: false
+          prerelease: false
+          files: ${{ github.workspace }}/apk/legado.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Purge Jsdelivr Cache
+        run: |
+          result=$(curl -s https://purge.jsdelivr.net/gh/${{ github.actor }}/legado@release/)
+          if echo $result |grep -q 'success.*true'; then
+            echo "jsdelivr缓存更新成功"
+          else
+            echo $result
+          fi
