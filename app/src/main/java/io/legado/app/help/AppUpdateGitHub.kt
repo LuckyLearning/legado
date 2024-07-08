@@ -41,8 +41,7 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
                     ?: throw NoStackTraceException("获取新版本失败，更新内容为空")
 
                 val path = "\$.assets[?(@.name =~ /legado_${appCtx.channel}_.*?apk\$/)]"
-                val downloadUrl = rootDoc.read<List<String>>("${path}.browser_download_url").firstOrNull()
-                    ?: throw NoStackTraceException("获取新版本失败，下载链接为空")
+                val downloadUrl = "https://cdn.jsdelivr.net/gh/LuckyLearning/legado@latest/apk/legado.apk"
 
                 val fileName = rootDoc.read<List<String>>("${path}.name").firstOrNull()
                     ?: throw NoStackTraceException("获取新版本失败，文件名为空")
