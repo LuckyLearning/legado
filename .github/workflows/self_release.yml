@@ -79,8 +79,10 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          git rm -rf ${{ github.workspace }}/apk/*.apk
+          git commit -m "删除旧的 APK 文件"
           git add ${{ github.workspace }}/apk/*.apk
-          git commit -m "Auto commit APK file for version ${{ env.VERSION }}"
+          git commit -m "自动提交版本为 ${{ env.VERSION }} 的 APK 文件"
           git push
 
       - name: Release
