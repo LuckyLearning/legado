@@ -64,6 +64,14 @@ jobs:
           chmod +x gradlew
           ./gradlew assemble${{ env.product }}release --build-cache --parallel --daemon --warning-mode all
 
+      - name: 删除旧的 APK file
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git rm -rf ${{ github.workspace }}/apk/*.apk
+          git commit -m "删除旧的 APK 文件"
+          git push
+
       - name: Organize the Files
         run: |
           mkdir -p ${{ github.workspace }}/apk/
@@ -79,8 +87,6 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git rm -rf ${{ github.workspace }}/apk/*.apk
-          git commit -m "删除旧的 APK 文件"
           git add ${{ github.workspace }}/apk/*.apk
           git commit -m "自动提交版本为 ${{ env.VERSION }} 的 APK 文件"
           git push
