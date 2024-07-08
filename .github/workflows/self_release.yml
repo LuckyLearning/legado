@@ -74,6 +74,14 @@ jobs:
         with:
           name: legado_${{ env.product }}
           path: ${{ github.workspace }}/apk/legado.apk
+    
+      - name: Commit APK file
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add ${{ github.workspace }}/apk/legado.apk
+          git commit -m "Auto commit APK file for version ${{ env.VERSION }}"
+          git push
 
       - name: Release
         if: ${{ env.product == 'app' }}
