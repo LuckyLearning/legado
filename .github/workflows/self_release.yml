@@ -89,7 +89,7 @@ jobs:
         with:
           name: legado_app_${{ env.VERSION }}
           tag_name: ${{ env.VERSION }}
-          body_path: ${{ github.workspace }}/CHANGELOG.md
+          body: update
           draft: false
           prerelease: false
           files: ${{ github.workspace }}/apk/legado.apk
@@ -98,7 +98,7 @@ jobs:
           
       - name: Purge Jsdelivr Cache
         run: |
-          result=$(curl -s https://purge.jsdelivr.net/gh/${{ github.actor }}/legado@release/)
+          result=$(curl -s https://purge.jsdelivr.net/gh/${{ github.actor }}/legado@latest/)
           if echo $result |grep -q 'success.*true'; then
             echo "jsdelivr缓存更新成功"
           else
