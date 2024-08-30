@@ -292,7 +292,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         }
     }
 
-    override fun onNewIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (!ReadBook.inBookshelf) {
             viewModel.removeFromBookshelf(null)
@@ -591,9 +591,9 @@ class ReadBookActivity : BaseReadBookActivity(),
     /**
      * 按键拦截,显示菜单
      */
-    override fun dispatchKeyEvent(event: KeyEvent?): Boolean {
-        val keyCode = event?.keyCode
-        val action = event?.action
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val keyCode = event.keyCode
+        val action = event.action
         val isDown = action == 0
 
         if (keyCode == KeyEvent.KEYCODE_MENU) {
@@ -852,8 +852,7 @@ class ReadBookActivity : BaseReadBookActivity(),
      */
     override fun onMenuActionFinally() = binding.run {
         textActionMenu.dismiss()
-        readView.curPage.cancelSelect()
-        readView.isTextSelected = false
+        readView.cancelSelect()
     }
 
     private fun speak(text: String) {
@@ -958,7 +957,6 @@ class ReadBookActivity : BaseReadBookActivity(),
         success: (() -> Unit)?
     ) {
         lifecycleScope.launch {
-            binding.readView.cancelSelect()
             binding.readView.upContent(relativePosition, resetPageOffset)
             if (relativePosition == 0) {
                 upSeekBarProgress()
@@ -973,7 +971,6 @@ class ReadBookActivity : BaseReadBookActivity(),
         resetPageOffset: Boolean,
         success: (() -> Unit)?
     ) = withContext(Main.immediate) {
-        binding.readView.cancelSelect()
         binding.readView.upContent(relativePosition, resetPageOffset)
         if (relativePosition == 0) {
             upSeekBarProgress()
@@ -991,6 +988,12 @@ class ReadBookActivity : BaseReadBookActivity(),
         bookChanged = true
         if (!ReadBook.inBookshelf) {
             viewModel.removeFromBookshelf { super.finish() }
+        }
+    }
+
+    override fun cancelSelect() {
+        runOnUiThread {
+            binding.readView.cancelSelect()
         }
     }
 
@@ -1184,11 +1187,8 @@ class ReadBookActivity : BaseReadBookActivity(),
             isShowingSearchResult = false
             binding.searchMenu.invalidate()
             binding.searchMenu.invisible()
-            binding.readView.isTextSelected = false
-            ReadBook.curTextChapter?.clearSearchResult()
-            ReadBook.prevTextChapter?.clearSearchResult()
-            ReadBook.nextTextChapter?.clearSearchResult()
-            binding.readView.curPage.cancelSelect(true)
+            ReadBook.clearSearchResult()
+            binding.readView.cancelSelect(true)
         }
     }
 
