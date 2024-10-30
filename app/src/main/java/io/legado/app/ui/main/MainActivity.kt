@@ -98,6 +98,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             bottomNavigationView.setOnNavigationItemReselectedListener(this@MainActivity)
         }
         upHomePage()
+        viewModel.deleteNotShelfBook()
         onBackPressedDispatcher.addCallback(this) {
             if (pagePosition != 0) {
                 binding.viewPagerMain.currentItem = 0
@@ -130,12 +131,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 }
             }
         }
-        return try {
-            super.dispatchTouchEvent(ev)
-        } catch (e: IllegalArgumentException) {
-            e.printStackTrace()
-            false
-        }
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onPostCreate(savedInstanceState: Bundle?) {
