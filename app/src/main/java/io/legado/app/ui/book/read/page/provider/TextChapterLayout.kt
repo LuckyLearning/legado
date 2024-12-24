@@ -1,6 +1,7 @@
 package io.legado.app.ui.book.read.page.provider
 
 import android.graphics.Paint
+import android.os.Build
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
@@ -340,6 +341,28 @@ class TextChapterLayout(
                     height = size.height * visibleWidth / size.width
                 }
 
+                Book.imgStyleSingle -> {
+                    width = visibleWidth
+                    height = size.height * visibleWidth / size.width
+                    if (height > visibleHeight) {
+                        width = width * visibleHeight / height
+                        height = visibleHeight
+                    }
+                    if (durY > 0f) {
+                        val textPage = pendingTextPage
+                        if (textPage.height < durY) {
+                            textPage.height = durY
+                        }
+                        textPage.text = stringBuilder.toString().ifEmpty { "本页无文字内容" }
+                        stringBuilder.clear()
+                        textPages.add(textPage)
+                        coroutineContext.ensureActive()
+                        onPageCompleted()
+                        pendingTextPage = TextPage()
+                        durY = 0f
+                    }
+                }
+
                 else -> {
                     if (size.width > visibleWidth) {
                         height = size.height * visibleWidth / size.width
@@ -416,6 +439,14 @@ class TextChapterLayout(
         var absStartX = x
         val widthsArray = FloatArray(text.length)
         textPaint.getTextWidths(text, widthsArray)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            if (widthsArray.isNotEmpty()) {
+                val letterSpacing = textPaint.letterSpacing * textPaint.textSize
+                val letterSpacingHalf = letterSpacing * 0.5f
+                widthsArray[0] += letterSpacingHalf
+                widthsArray[widthsArray.lastIndex] += letterSpacingHalf
+            }
+        }
         val layout = if (ReadBookConfig.useZhLayout) {
             val (words, widths) = measureTextSplit(text, widthsArray)
             ZhLayout(text, textPaint, visibleWidth, words, widths)
