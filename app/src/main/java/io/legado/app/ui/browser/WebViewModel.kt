@@ -9,11 +9,12 @@ import android.webkit.WebView
 import androidx.documentfile.provider.DocumentFile
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppConst
+import io.legado.app.constant.SourceType
 import io.legado.app.data.appDb
 import io.legado.app.exception.NoStackTraceException
-import io.legado.app.help.IntentData
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
+import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.source.SourceVerificationHelp
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.utils.DocumentUtils
@@ -33,7 +34,9 @@ class WebViewModel(application: Application) : BaseViewModel(application) {
     val headerMap: HashMap<String, String> = hashMapOf()
     var sourceVerificationEnable: Boolean = false
     var refetchAfterSuccess: Boolean = true
+    var sourceName: String = ""
     var sourceOrigin: String = ""
+    var sourceType = SourceType.book
 
     fun initData(
         intent: Intent,
@@ -43,11 +46,13 @@ class WebViewModel(application: Application) : BaseViewModel(application) {
             this@WebViewModel.intent = intent
             val url = intent.getStringExtra("url")
                 ?: throw NoStackTraceException("url不能为空")
+            sourceName = intent.getStringExtra("sourceName") ?: ""
             sourceOrigin = intent.getStringExtra("sourceOrigin") ?: ""
+            sourceType = intent.getIntExtra("sourceType", SourceType.book)
             sourceVerificationEnable = intent.getBooleanExtra("sourceVerificationEnable", false)
             refetchAfterSuccess = intent.getBooleanExtra("refetchAfterSuccess", true)
-            val headerMapF = IntentData.get<Map<String, String>>(url)
-            val analyzeUrl = AnalyzeUrl(url, headerMapF = headerMapF)
+            val source = SourceHelp.getSource(sourceOrigin, sourceType)
+            val analyzeUrl = AnalyzeUrl(url, source = source, coroutineContext = coroutineContext)
             baseUrl = analyzeUrl.url
             headerMap.putAll(analyzeUrl.headerMap)
             if (analyzeUrl.isPost()) {
@@ -105,7 +110,8 @@ class WebViewModel(application: Application) : BaseViewModel(application) {
                 html = AnalyzeUrl(
                     url,
                     headerMapF = headerMap,
-                    source = source
+                    source = source,
+                    coroutineContext = coroutineContext
                 ).getStrResponseAwait(useWebView = false).body
                 SourceVerificationHelp.setResult(sourceOrigin, html ?: "")
             }.onSuccess {
@@ -120,6 +126,22 @@ class WebViewModel(application: Application) : BaseViewModel(application) {
                     success.invoke()
                 }
             }
+        }
+    }
+
+    fun disableSource(block: () -> Unit) {
+        execute {
+            SourceHelp.enableSource(sourceOrigin, sourceType, false)
+        }.onSuccess {
+            block.invoke()
+        }
+    }
+
+    fun deleteSource(block: () -> Unit) {
+        execute {
+            SourceHelp.deleteSource(sourceOrigin, sourceType)
+        }.onSuccess {
+            block.invoke()
         }
     }
 

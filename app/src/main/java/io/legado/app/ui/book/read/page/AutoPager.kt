@@ -17,6 +17,7 @@ import io.legado.app.utils.canvasrecorder.recordIfNeeded
 class AutoPager(private val readView: ReadView) {
     private var progress = 0
     var isRunning = false
+        private set
     private var isPausing = false
     private var scrollOffsetRemain = 0.0
     private var scrollOffset = 0
@@ -79,7 +80,10 @@ class AutoPager(private val readView: ReadView) {
         }
 
         if (readView.isScroll) {
-            if (!isPausing) readView.curPage.scroll(-scrollOffset)
+            if (!isPausing) {
+                readView.curPage.scroll(-scrollOffset)
+                scrollOffset = 0
+            }
         } else {
             val bottom = progress
             val width = readView.width
@@ -102,7 +106,7 @@ class AutoPager(private val readView: ReadView) {
     }
 
     fun computeOffset() {
-        if (!isRunning) {
+        if (!isRunning || isPausing) {
             return
         }
 

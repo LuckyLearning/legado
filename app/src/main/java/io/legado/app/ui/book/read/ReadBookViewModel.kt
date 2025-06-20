@@ -39,6 +39,7 @@ import io.legado.app.utils.mapParallelSafe
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.toStringArray
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
@@ -51,6 +52,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
+import kotlin.coroutines.coroutineContext
 
 /**
  * 阅读界面数据处理
@@ -67,13 +69,21 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
         AppConfig.detectClickArea()
     }
 
+    fun initReadBookConfig(intent: Intent) {
+        val bookUrl = intent.getStringExtra("bookUrl")
+        val book = when {
+            bookUrl.isNullOrEmpty() -> appDb.bookDao.lastReadBook
+            else -> appDb.bookDao.getBook(bookUrl)
+        } ?: return
+        ReadBook.upReadBookConfig(book)
+    }
+
     /**
      * 初始化
      */
     fun initData(intent: Intent, success: (() -> Unit)? = null) {
         execute {
             ReadBook.inBookshelf = intent.getBooleanExtra("inBookshelf", true)
-            ReadBook.tocChanged = intent.getBooleanExtra("tocChanged", false)
             ReadBook.chapterChanged = intent.getBooleanExtra("chapterChanged", false)
             val bookUrl = intent.getStringExtra("bookUrl")
             val book = when {
@@ -113,7 +123,6 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             return
         }
         ReadBook.upMsg(null)
-        ensureChapterExist()
         if (!isSameBook) {
             ReadBook.loadContent(resetPageOffset = true)
         } else {
@@ -141,16 +150,10 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             return true
         } catch (e: Throwable) {
             ReadBook.upMsg("打开本地书籍出错: ${e.localizedMessage}")
-            if (e is FileNotFoundException) {
+            if (e is SecurityException || e is FileNotFoundException) {
                 permissionDenialLiveData.postValue(0)
             }
             return false
-        }
-    }
-
-    private fun ensureChapterExist() {
-        if (ReadBook.simulatedChapterSize > 0 && ReadBook.durChapterIndex > ReadBook.simulatedChapterSize - 1) {
-            ReadBook.durChapterIndex = ReadBook.simulatedChapterSize - 1
         }
     }
 
@@ -163,6 +166,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             WebBook.getBookInfoAwait(source, book, canReName = false)
             return true
         } catch (e: Throwable) {
+            coroutineContext.ensureActive()
             ReadBook.upMsg("详情页出错: ${e.localizedMessage}")
             return false
         }
@@ -174,9 +178,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
     fun loadChapterList(book: Book) {
         execute {
             if (loadChapterListAwait(book)) {
-                ensureChapterExist()
                 ReadBook.upMsg(null)
-                ReadBook.loadContent(resetPageOffset = true)
             }
         }
     }
@@ -185,13 +187,10 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
         if (book.isLocal) {
             kotlin.runCatching {
                 LocalBook.getChapterList(book).let {
-                    book.latestChapterTime = System.currentTimeMillis()
                     appDb.bookChapterDao.delByBook(book.bookUrl)
                     appDb.bookChapterDao.insert(*it.toTypedArray())
                     appDb.bookDao.update(book)
-                    ReadBook.chapterSize = it.size
-                    ReadBook.simulatedChapterSize = book.simulatedTotalChapterNum()
-                    ReadBook.clearTextChapter()
+                    ReadBook.onChapterListUpdated(book)
                 }
                 return true
             }.onFailure {
@@ -220,10 +219,10 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                         }
                         appDb.bookChapterDao.delByBook(oldBook.bookUrl)
                         appDb.bookChapterDao.insert(*cList.toTypedArray())
-                        ReadBook.chapterSize = cList.size
-                        ReadBook.simulatedChapterSize = book.simulatedTotalChapterNum()
+                        ReadBook.onChapterListUpdated(book)
                         return true
                     }.onFailure {
+                        coroutineContext.ensureActive()
                         ReadBook.upMsg(context.getString(R.string.error_load_toc))
                         return false
                     }
@@ -242,10 +241,10 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
         if (!AppConfig.syncBookProgress) return
         execute {
             AppWebDav.getBookProgress(book)
-                ?: throw NoStackTraceException("没有进度")
         }.onError {
             AppLog.put("拉取阅读进度失败《${book.name}》\n${it.localizedMessage}", it)
         }.onSuccess { progress ->
+            progress ?: return@onSuccess
             if (progress.durChapterIndex < book.durChapterIndex ||
                 (progress.durChapterIndex == book.durChapterIndex
                         && progress.durChapterPos < book.durChapterPos)
@@ -256,7 +255,6 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
                 AppLog.put("自动同步阅读进度成功《${book.name}》 ${progress.durChapterTitle}")
             }
         }
-
     }
 
     /**
@@ -298,7 +296,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             }.onStart {
                 ReadBook.upMsg(context.getString(R.string.source_auto_changing))
             }.mapParallelSafe(AppConfig.threadCount) { source ->
-                val book = WebBook.preciseSearchAwait(this, source, name, author).getOrThrow()
+                val book = WebBook.preciseSearchAwait(source, name, author).getOrThrow()
                 if (book.tocUrl.isEmpty()) {
                     WebBook.getBookInfoAwait(source, book)
                 }
@@ -506,7 +504,6 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
     /**
      * 保存图片
      */
-    @Suppress("BlockingMethodInNonBlockingContext")
     fun saveImage(src: String?, uri: Uri) {
         src ?: return
         val book = ReadBook.book ?: return

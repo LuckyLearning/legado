@@ -12,12 +12,24 @@ import android.os.Build
 import com.github.liuyueyi.quick.transfer.constants.TransType
 import com.jeremyliao.liveeventbus.LiveEventBus
 import com.jeremyliao.liveeventbus.logger.DefaultLogger
+import com.script.rhino.ReadOnlyJavaObject
+import com.script.rhino.RhinoScriptEngine
+import com.script.rhino.RhinoWrapFactory
 import io.legado.app.base.AppContextWrapper
 import io.legado.app.constant.AppConst.channelIdDownload
 import io.legado.app.constant.AppConst.channelIdReadAloud
 import io.legado.app.constant.AppConst.channelIdWeb
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
+import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookChapter
+import io.legado.app.data.entities.BookSource
+import io.legado.app.data.entities.HttpTTS
+import io.legado.app.data.entities.RssSource
+import io.legado.app.data.entities.rule.BookInfoRule
+import io.legado.app.data.entities.rule.ContentRule
+import io.legado.app.data.entities.rule.ExploreRule
+import io.legado.app.data.entities.rule.SearchRule
 import io.legado.app.help.AppFreezeMonitor
 import io.legado.app.help.AppWebDav
 import io.legado.app.help.CrashHandler
@@ -27,10 +39,12 @@ import io.legado.app.help.RuleBigDataHelp
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig.applyDayNight
+import io.legado.app.help.config.ThemeConfig.applyDayNightInit
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.Cronet
 import io.legado.app.help.http.ObsoleteUrlFactory
 import io.legado.app.help.http.okHttpClient
+import io.legado.app.help.rhino.NativeBaseSource
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.storage.Backup
 import io.legado.app.model.BookCover
@@ -54,28 +68,30 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashHandler(this)
-        LogUtils.d("App", "onCreate")
-        LogUtils.logDeviceInfo()
         if (isDebuggable) {
             ThreadUtils.setThreadAssertsDisabledForTesting(true)
         }
         oldConfig = Configuration(resources.configuration)
-        //预下载Cronet so
-        Cronet.preDownload()
-        createNotificationChannels()
-        LiveEventBus.config()
-            .lifecycleObserverAlwaysActive(true)
-            .autoClear(false)
-            .enableLogger(BuildConfig.DEBUG || AppConfig.recordLog)
-            .setLogger(EventLogger())
-        applyDayNight(this)
+        applyDayNightInit(this)
         registerActivityLifecycleCallbacks(LifecycleHelp)
         defaultSharedPreferences.registerOnSharedPreferenceChangeListener(AppConfig)
-        DefaultData.upVersion()
-        AppFreezeMonitor.init(this)
         Coroutine.async {
+            LogUtils.init(this@App)
+            LogUtils.d("App", "onCreate")
+            LogUtils.logDeviceInfo()
+            //预下载Cronet so
+            Cronet.preDownload()
+            createNotificationChannels()
+            LiveEventBus.config()
+                .lifecycleObserverAlwaysActive(true)
+                .autoClear(false)
+                .enableLogger(BuildConfig.DEBUG || AppConfig.recordLog)
+                .setLogger(EventLogger())
+            DefaultData.upVersion()
+            AppFreezeMonitor.init(this@App)
             URL.setURLStreamHandlerFactory(ObsoleteUrlFactory(okHttpClient))
             launch { installGmsTlsProvider(appCtx) }
+            initRhino()
             //初始化封面
             BookCover.toString()
             //清除过期数据
@@ -89,8 +105,9 @@ class App : Application() {
             Backup.clearCache()
             //初始化简繁转换引擎
             when (AppConfig.chineseConverterType) {
-                1 -> launch {
+                1 -> {
                     ChineseUtils.fixT2sDict()
+                    ChineseUtils.preLoad(true, TransType.TRADITIONAL_TO_SIMPLE)
                 }
 
                 2 -> ChineseUtils.preLoad(true, TransType.SIMPLE_TO_TRADITIONAL)
@@ -195,6 +212,19 @@ class App : Application() {
         )
     }
 
+    private fun initRhino() {
+        RhinoScriptEngine
+        RhinoWrapFactory.register(BookSource::class.java, NativeBaseSource.factory)
+        RhinoWrapFactory.register(RssSource::class.java, NativeBaseSource.factory)
+        RhinoWrapFactory.register(HttpTTS::class.java, NativeBaseSource.factory)
+        RhinoWrapFactory.register(ExploreRule::class.java, ReadOnlyJavaObject.factory)
+        RhinoWrapFactory.register(SearchRule::class.java, ReadOnlyJavaObject.factory)
+        RhinoWrapFactory.register(BookInfoRule::class.java, ReadOnlyJavaObject.factory)
+        RhinoWrapFactory.register(ContentRule::class.java, ReadOnlyJavaObject.factory)
+        RhinoWrapFactory.register(BookChapter::class.java, ReadOnlyJavaObject.factory)
+        RhinoWrapFactory.register(Book.ReadConfig::class.java, ReadOnlyJavaObject.factory)
+    }
+
     class EventLogger : DefaultLogger() {
 
         override fun log(level: Level, msg: String) {
@@ -209,6 +239,14 @@ class App : Application() {
 
         companion object {
             private const val TAG = "[LiveEventBus]"
+        }
+    }
+
+    companion object {
+        init {
+            if (BuildConfig.DEBUG) {
+                System.setProperty("kotlinx.coroutines.debug", "on")
+            }
         }
     }
 

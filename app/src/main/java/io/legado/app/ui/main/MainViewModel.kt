@@ -17,10 +17,8 @@ import io.legado.app.help.DefaultData
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.addType
 import io.legado.app.help.book.isLocal
-import io.legado.app.help.book.isSameNameAuthor
 import io.legado.app.help.book.isUpError
 import io.legado.app.help.book.removeType
-import io.legado.app.help.book.simulatedTotalChapterNum
 import io.legado.app.help.book.sync
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.CacheBook
@@ -58,6 +56,10 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
     }
     val booksGridRecycledViewPool = RecycledViewPool().apply {
         setMaxRecycledViews(0, 100)
+    }
+
+    init {
+        deleteNotShelfBook()
     }
 
     override fun onCleared() {
@@ -154,9 +156,10 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
         }
         kotlin.runCatching {
             val oldBook = book.copy()
-            WebBook.runPreUpdateJs(source, book)
             if (book.tocUrl.isBlank()) {
                 WebBook.getBookInfoAwait(source, book)
+            } else {
+                WebBook.runPreUpdateJs(source, book)
             }
             val toc = WebBook.getChapterListAwait(source, book).getOrThrow()
             book.sync(oldBook)
@@ -169,11 +172,7 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
             }
             appDb.bookChapterDao.delByBook(bookUrl)
             appDb.bookChapterDao.insert(*toc.toTypedArray())
-            if (book.isSameNameAuthor(ReadBook.book)) {
-                ReadBook.book = book
-                ReadBook.chapterSize = book.totalChapterNum
-                ReadBook.simulatedChapterSize = book.simulatedTotalChapterNum()
-            }
+            ReadBook.onChapterListUpdated(book)
             addDownload(source, book)
         }.onFailure {
             AppLog.put("${book.name} 更新目录失败\n${it.localizedMessage}", it)
@@ -208,6 +207,7 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
      * 缓存书籍
      */
     private fun cacheBook() {
+        if (AppConfig.preDownloadNum == 0) return
         cacheBookJob?.cancel()
         cacheBookJob = viewModelScope.launch(upTocPool) {
             while (isActive) {
@@ -230,6 +230,7 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
                         }
                     }
                 }
+                delay(100)
             }
         }
     }
@@ -250,7 +251,7 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
         }
     }
 
-    fun deleteNotShelfBook() {
+    private fun deleteNotShelfBook() {
         execute {
             appDb.bookDao.deleteNotShelfBook()
         }

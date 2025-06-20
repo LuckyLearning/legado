@@ -157,7 +157,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                     viewModel.addBookByUrl(it)
                 }
             }
-            noButton()
+            cancelButton()
         }
     }
 
@@ -180,9 +180,11 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
             customView { alertBinding.root }
             okButton {
                 alertBinding.apply {
+                    var notifyMain = false
+                    var recreate = false
                     if (AppConfig.bookGroupStyle != spGroupStyle.selectedItemPosition) {
                         AppConfig.bookGroupStyle = spGroupStyle.selectedItemPosition
-                        postEvent(EventBus.NOTIFY_MAIN, false)
+                        notifyMain = true
                     }
                     if (AppConfig.showUnread != swShowUnread.isChecked) {
                         AppConfig.showUnread = swShowUnread.isChecked
@@ -211,7 +213,12 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                         } else {
                             activityViewModel.booksListRecycledViewPool.clear()
                         }
+                        recreate = true
+                    }
+                    if (recreate) {
                         postEvent(EventBus.RECREATE, "")
+                    } else if (notifyMain) {
+                        postEvent(EventBus.NOTIFY_MAIN, false)
                     }
                 }
             }
@@ -231,7 +238,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                     viewModel.importBookshelf(it, groupId)
                 }
             }
-            noButton()
+            cancelButton()
             neutralButton(R.string.select_file) {
                 importBookshelf.launch {
                     mode = HandleFileContract.FILE

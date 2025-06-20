@@ -11,6 +11,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.ConcurrentException
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.coroutine.CompositeCoroutine
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.service.CacheBookService
@@ -21,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Semaphore
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.CoroutineContext
 
@@ -88,20 +90,18 @@ object CacheBook {
     }
 
     fun stop(context: Context) {
-        context.startService<CacheBookService> {
-            action = IntentAction.stop
+        if (CacheBookService.isRun) {
+            context.startService<CacheBookService> {
+                action = IntentAction.stop
+            }
         }
-    }
-
-    fun clear() {
-        successDownloadSet.clear()
-        errorDownloadMap.clear()
     }
 
     fun close() {
         cacheBookMap.forEach { it.value.stop() }
         cacheBookMap.clear()
-        clear()
+        successDownloadSet.clear()
+        errorDownloadMap.clear()
     }
 
     val downloadSummary: String
@@ -143,6 +143,7 @@ object CacheBook {
 
         private val waitDownloadSet = linkedSetOf<Int>()
         private val onDownloadSet = linkedSetOf<Int>()
+        private val tasks = CompositeCoroutine()
         private var isStopped = false
         private var waitingRetry = false
 
@@ -155,7 +156,7 @@ object CacheBook {
 
         @Synchronized
         fun isRun(): Boolean {
-            return waitDownloadSet.size > 0 || onDownloadSet.size > 0
+            return waitDownloadSet.isNotEmpty() || onDownloadSet.isNotEmpty()
         }
 
         @Synchronized
@@ -166,6 +167,7 @@ object CacheBook {
         @Synchronized
         fun stop() {
             waitDownloadSet.clear()
+            tasks.clear()
             isStopped = true
             postEvent(EventBus.UP_DOWNLOAD, book.bookUrl)
         }
@@ -282,6 +284,8 @@ object CacheBook {
                     onCancel(chapterIndex)
                 }.onFinally {
                     onFinally()
+                }.let {
+                    tasks.add(it)
                 }
                 return
             }
@@ -306,6 +310,8 @@ object CacheBook {
                 onCancel(chapterIndex)
             }.onFinally {
                 onFinally()
+            }.apply {
+                tasks.add(this)
             }.start()
         }
 
@@ -338,6 +344,7 @@ object CacheBook {
         fun download(
             scope: CoroutineScope,
             chapter: BookChapter,
+            semaphore: Semaphore?,
             resetPageOffset: Boolean = false
         ) {
             if (onDownloadSet.contains(chapter.index)) {
@@ -352,7 +359,8 @@ object CacheBook {
                 book,
                 chapter,
                 start = CoroutineStart.LAZY,
-                executeContext = IO
+                executeContext = IO,
+                semaphore = semaphore
             ).onSuccess { content ->
                 onSuccess(chapter)
                 ReadBook.downloadedChapters.add(chapter.index)
@@ -365,6 +373,7 @@ object CacheBook {
                 downloadFinish(chapter, "获取正文失败\n${it.localizedMessage}", resetPageOffset)
             }.onCancel {
                 onCancel(chapter.index)
+                downloadFinish(chapter, "download canceled", resetPageOffset, true)
             }.onFinally {
                 postEvent(EventBus.UP_DOWNLOAD, book.bookUrl)
             }.start()
@@ -373,12 +382,14 @@ object CacheBook {
         private fun downloadFinish(
             chapter: BookChapter,
             content: String,
-            resetPageOffset: Boolean = false
+            resetPageOffset: Boolean = false,
+            canceled: Boolean = false
         ) {
             if (ReadBook.book?.bookUrl == book.bookUrl) {
                 ReadBook.contentLoadFinish(
                     book, chapter, content,
                     resetPageOffset = resetPageOffset,
+                    canceled = canceled
                 )
             }
         }

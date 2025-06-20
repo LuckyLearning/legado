@@ -16,6 +16,9 @@ import android.view.WindowMetrics
 import android.widget.FrameLayout
 import androidx.annotation.ColorInt
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
 import androidx.fragment.app.DialogFragment
 import io.legado.app.R
 import io.legado.app.ui.widget.dialog.TextDialog
@@ -31,6 +34,14 @@ inline fun <reified T : DialogFragment> AppCompatActivity.showDialogFragment(
     dialog.show(supportFragmentManager, T::class.simpleName)
 }
 
+inline fun <reified T : DialogFragment> AppCompatActivity.dismissDialogFragment() {
+    supportFragmentManager.fragments.forEach {
+        if (it is T) {
+            it.dismissAllowingStateLoss()
+        }
+    }
+}
+
 fun AppCompatActivity.showDialogFragment(dialogFragment: DialogFragment) {
     dialogFragment.show(supportFragmentManager, dialogFragment::class.simpleName)
 }
@@ -41,7 +52,9 @@ val WindowManager.windowSize: DisplayMetrics
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val windowMetrics: WindowMetrics = currentWindowMetrics
             val insets = windowMetrics.windowInsets
-                .getInsetsIgnoringVisibility(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+                .getInsetsIgnoringVisibility(
+                    WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout()
+                )
             val windowWidth = windowMetrics.bounds.width()
             val windowHeight = windowMetrics.bounds.height()
             var insetsWidth = insets.left + insets.right
@@ -159,6 +172,28 @@ fun Activity.setNavigationBarColorAuto(@ColorInt color: Int) {
             systemUiVisibility and View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
         }
         decorView.systemUiVisibility = systemUiVisibility
+    }
+}
+
+fun Activity.keepScreenOn(on: Boolean) {
+    val isScreenOn =
+        (window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0
+    if (on == isScreenOn) return
+    if (on) {
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    } else {
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+}
+
+fun Activity.toggleSystemBar(show: Boolean) {
+    WindowCompat.getInsetsController(window, window.decorView).run {
+        if (show) {
+            show(WindowInsetsCompat.Type.systemBars())
+        } else {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
     }
 }
 

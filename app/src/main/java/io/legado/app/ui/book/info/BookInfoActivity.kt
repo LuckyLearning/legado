@@ -3,9 +3,11 @@ package io.legado.app.ui.book.info
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.widget.CheckBox
 import android.widget.LinearLayout
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,6 +27,7 @@ import io.legado.app.help.AppWebDav
 import io.legado.app.help.book.addType
 import io.legado.app.help.book.getRemoteUrl
 import io.legado.app.help.book.isAudio
+import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isLocalTxt
 import io.legado.app.help.book.isWebFile
@@ -45,6 +48,7 @@ import io.legado.app.ui.book.changecover.ChangeCoverDialog
 import io.legado.app.ui.book.changesource.ChangeBookSourceDialog
 import io.legado.app.ui.book.group.GroupSelectDialog
 import io.legado.app.ui.book.info.edit.BookInfoEditActivity
+import io.legado.app.ui.book.manga.ReadMangaActivity
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.read.ReadBookActivity.Companion.RESULT_DELETED
 import io.legado.app.ui.book.search.SearchActivity
@@ -56,6 +60,8 @@ import io.legado.app.ui.widget.dialog.PhotoDialog
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.utils.ColorUtils
+import io.legado.app.utils.ConvertUtils
+import io.legado.app.utils.FileDoc
 import io.legado.app.utils.GSON
 import io.legado.app.utils.StartActivityContract
 import io.legado.app.utils.applyNavigationBarPadding
@@ -139,7 +145,6 @@ class BookInfoActivity :
             viewModel.refreshBook(book)
         }
     }
-    private var tocChanged = false
     private var chapterChanged = false
     private val waitDialog by lazy { WaitDialog(this) }
     private var editMenuItem: MenuItem? = null
@@ -158,6 +163,9 @@ class BookInfoActivity :
         binding.flAction.applyNavigationBarPadding()
         binding.tvShelf.setTextColor(getPrimaryTextColor(ColorUtils.isColorLight(bottomBackground)))
         binding.tvToc.text = getString(R.string.toc_s, getString(R.string.loading))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
+            binding.tvIntro.revealOnFocusHint = false
+        }
         viewModel.bookData.observe(this) { showBook(it) }
         viewModel.chapterListData.observe(this) { upLoading(false, it) }
         viewModel.waitDialogData.observe(this) { upWaitDialogStatus(it) }
@@ -249,7 +257,6 @@ class BookInfoActivity :
             R.id.menu_log -> showDialogFragment<AppLogDialog>()
             R.id.menu_split_long_chapter -> {
                 upLoading(true)
-                tocChanged = true
                 viewModel.getBook()?.let {
                     it.setSplitLongChapter(!item.isChecked)
                     viewModel.loadBookInfo(it, false)
@@ -285,6 +292,17 @@ class BookInfoActivity :
         }
     }
 
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.action == MotionEvent.ACTION_DOWN) {
+            currentFocus?.let {
+                if (it === binding.tvIntro && binding.tvIntro.hasSelection()) {
+                    it.clearFocus()
+                }
+            }
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
     private fun refreshBook() {
         upLoading(true)
         viewModel.getBook()?.let {
@@ -294,7 +312,7 @@ class BookInfoActivity :
 
     private fun upLoadBook(
         book: Book,
-        bookWebDav: RemoteBookWebDav? = AppWebDav.defaultBookWebDav
+        bookWebDav: RemoteBookWebDav? = AppWebDav.defaultBookWebDav,
     ) {
         lifecycleScope.launch {
             waitDialog.setText("上传中.....")
@@ -323,21 +341,37 @@ class BookInfoActivity :
         tvIntro.text = book.getDisplayIntro()
         llToc?.visible(!book.isWebFile)
         upTvBookshelf()
-        val kinds = book.getKindList()
-        if (kinds.isEmpty()) {
-            lbKind.gone()
-        } else {
-            lbKind.visible()
-            lbKind.setLabels(kinds)
-        }
+        upKinds(book)
         upGroup(book.group)
     }
 
+    private fun upKinds(book: Book) = binding.run {
+        lifecycleScope.launch {
+            var kinds = book.getKindList()
+            if (book.isLocal) {
+                withContext(IO) {
+                    val size = FileDoc.fromFile(book.bookUrl).size
+                    if (size > 0) {
+                        kinds = kinds.toMutableList()
+                        kinds.add(ConvertUtils.formatFileSize(size))
+                    }
+                }
+            }
+            if (kinds.isEmpty()) {
+                lbKind.gone()
+            } else {
+                lbKind.visible()
+                lbKind.setLabels(kinds)
+            }
+        }
+    }
+
     private fun showCover(book: Book) {
-        binding.ivCover.load(book.getDisplayCover(), book.name, book.author, false, book.origin)
-        if (!AppConfig.isEInkMode) {
-            BookCover.loadBlur(this, book.getDisplayCover())
-                .into(binding.bgBook)
+        binding.ivCover.load(book.getDisplayCover(), book.name, book.author, false, book.origin) {
+            if (!AppConfig.isEInkMode) {
+                BookCover.loadBlur(this, book.getDisplayCover(), false, book.origin)
+                    .into(binding.bgBook)
+            }
         }
     }
 
@@ -517,8 +551,9 @@ class BookInfoActivity :
             }
             val book = viewModel.getBook() ?: return@launch
             val variable = withContext(IO) { book.getCustomVariable() }
-            val comment =
-                source.getDisplayVariableComment("""书籍变量可在js中通过book.getVariable("custom")获取""")
+            val comment = source.getDisplayVariableComment(
+                """书籍变量可在js中通过book.getVariable("custom")获取"""
+            )
             showDialogFragment(
                 VariableDialog(
                     getString(R.string.set_book_variable),
@@ -587,7 +622,7 @@ class BookInfoActivity :
     }
 
     private fun showWebFileDownloadAlert(
-        onClick: ((Book) -> Unit)? = null
+        onClick: ((Book) -> Unit)? = null,
     ) {
         val webFiles = viewModel.webFiles
         if (webFiles.isEmpty()) {
@@ -636,7 +671,7 @@ class BookInfoActivity :
     private fun showDecompressFileImportAlert(
         archiveFileUri: Uri,
         fileNames: List<String>,
-        success: ((Book) -> Unit)? = null
+        success: ((Book) -> Unit)? = null,
     ) {
         if (fileNames.isEmpty()) {
             toastOnUi(R.string.unsupport_archivefile_entry)
@@ -676,14 +711,16 @@ class BookInfoActivity :
             )
 
             else -> readBookResult.launch(
-                Intent(this, ReadBookActivity::class.java)
+                Intent(
+                    this,
+                    if (book.isImage && AppConfig.showMangaUi) ReadMangaActivity::class.java
+                    else ReadBookActivity::class.java
+                )
                     .putExtra("bookUrl", book.bookUrl)
                     .putExtra("inBookshelf", viewModel.inBookshelf)
-                    .putExtra("tocChanged", tocChanged)
                     .putExtra("chapterChanged", chapterChanged)
             )
         }
-        tocChanged = false
     }
 
     override val oldBook: Book?

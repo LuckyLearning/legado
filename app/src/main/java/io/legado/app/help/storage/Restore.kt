@@ -105,17 +105,14 @@ object Restore {
                 .forEach { book ->
                     book.coverUrl = LocalBook.getCoverPath(book)
                 }
-            val updateBooks = arrayListOf<Book>()
-            val newBooks = arrayListOf<Book>()
-            it.forEach { book ->
-                if (appDb.bookDao.has(book.bookUrl) == true) {
-                    updateBooks.add(book)
-                } else {
-                    newBooks.add(book)
+            val books = if (BackupConfig.ignoreLocalBook) {
+                it.filter { book ->
+                    !book.isLocal
                 }
+            } else {
+                it
             }
-            appDb.bookDao.update(*updateBooks.toTypedArray())
-            appDb.bookDao.insert(*newBooks.toTypedArray())
+            appDb.bookDao.insert(*books.toTypedArray())
         }
         fileToListT<Bookmark>(path, "bookmark.json")?.let {
             appDb.bookmarkDao.insert(*it.toTypedArray())
@@ -259,7 +256,8 @@ object Restore {
             edit.apply()
         }
         ReadBookConfig.apply {
-            styleSelect = appCtx.getPrefInt(PreferKey.readStyleSelect)
+            comicStyleSelect = appCtx.getPrefInt(PreferKey.comicStyleSelect)
+            readStyleSelect = appCtx.getPrefInt(PreferKey.readStyleSelect)
             shareLayout = appCtx.getPrefBoolean(PreferKey.shareLayout)
             hideStatusBar = appCtx.getPrefBoolean(PreferKey.hideStatusBar)
             hideNavigationBar = appCtx.getPrefBoolean(PreferKey.hideNavigationBar)

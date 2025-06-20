@@ -22,6 +22,7 @@ import io.legado.app.utils.compress.ZipUtils
 import io.legado.app.utils.createFileIfNotExist
 import io.legado.app.utils.createFolderIfNotExist
 import io.legado.app.utils.delete
+import io.legado.app.utils.externalCache
 import io.legado.app.utils.find
 import io.legado.app.utils.list
 import io.legado.app.utils.openInputStream
@@ -164,11 +165,15 @@ class AboutFragment : PreferenceFragmentCompat() {
     }
 
     private fun copyLogs(doc: FileDoc) {
-        val logFiles = File(appCtx.externalCacheDir, "logs")
-        val crashFiles = File(appCtx.externalCacheDir, "crash")
+        val cacheDir = appCtx.externalCache
+        val logFiles = File(cacheDir, "logs")
+        val crashFiles = File(cacheDir, "crash")
+        val logcatFile = File(cacheDir, "logcat.txt")
 
-        val zipFile = File(appCtx.externalCacheDir, "logs.zip")
-        ZipUtils.zipFiles(arrayListOf(logFiles, crashFiles), zipFile)
+        dumpLogcat(logcatFile)
+
+        val zipFile = File(cacheDir, "logs.zip")
+        ZipUtils.zipFiles(arrayListOf(logFiles, crashFiles, logcatFile), zipFile)
 
         doc.find("logs.zip")?.delete()
 
@@ -182,7 +187,7 @@ class AboutFragment : PreferenceFragmentCompat() {
     }
 
     private fun copyHeapDump(doc: FileDoc): Boolean {
-        val heapFile = FileDoc.fromFile(File(appCtx.externalCacheDir, "heapDump")).list()
+        val heapFile = FileDoc.fromFile(File(appCtx.externalCache, "heapDump")).list()
             ?.firstOrNull() ?: return false
         doc.find("heapDump")?.delete()
         val heapDumpDoc = doc.createFolderIfNotExist("heapDump")
@@ -193,6 +198,17 @@ class AboutFragment : PreferenceFragmentCompat() {
                 }
         }
         return true
+    }
+
+    private fun dumpLogcat(file: File) {
+        try {
+            val process = Runtime.getRuntime().exec("logcat -d")
+            file.outputStream().use {
+                process.inputStream.copyTo(it)
+            }
+        } catch (e: Exception) {
+            AppLog.put("保存Logcat失败\n$e", e)
+        }
     }
 
 }

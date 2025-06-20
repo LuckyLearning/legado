@@ -7,7 +7,6 @@ import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.SubMenu
 import android.view.WindowManager
-import android.widget.EditText
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.PopupMenu
@@ -62,11 +61,13 @@ import io.legado.app.utils.observeEvent
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.share
+import io.legado.app.utils.shouldHideSoftInput
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
 import io.legado.app.utils.splitNotBlank
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toastOnUi
+import io.legado.app.utils.transaction
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
@@ -90,7 +91,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     override val binding by viewBinding(ActivityBookSourceBinding::inflate)
     override val viewModel by viewModels<BookSourceViewModel>()
     private val importRecordKey = "bookSourceRecordKey"
-    private val adapter by lazy { BookSourceAdapter(this, this) }
+    private val adapter by lazy { BookSourceAdapter(this, this, binding.recyclerView) }
     private val itemTouchCallback by lazy { ItemTouchCallback(adapter) }
     private val searchView: SearchView by lazy {
         binding.titleBar.findViewById(R.id.search_view)
@@ -161,9 +162,11 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (ev.action == MotionEvent.ACTION_DOWN) {
             currentFocus?.let {
-                if (it is EditText) {
-                    it.clearFocus()
-                    it.hideSoftInput()
+                if (it.shouldHideSoftInput(ev)) {
+                    it.post {
+                        it.clearFocus()
+                        it.hideSoftInput()
+                    }
                 }
             }
         }
@@ -590,7 +593,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         }
     }
 
-    private fun upGroupMenu() = groupMenu?.let { menu ->
+    private fun upGroupMenu() = groupMenu?.transaction { menu ->
         menu.removeGroup(R.id.source_group)
         groups.forEach {
             menu.add(R.id.source_group, Menu.NONE, Menu.NONE, it)
@@ -617,7 +620,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             okButton {
                 val text = alertBinding.editView.text?.toString()
                 text?.let {
-                    if (!cacheUrls.contains(it)) {
+                    if (it.isAbsUrl() && !cacheUrls.contains(it)) {
                         cacheUrls.add(0, it)
                         aCache.put(importRecordKey, cacheUrls.joinToString(","))
                     }
@@ -648,7 +651,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                 adapter.itemCount,
                 bundleOf(Pair("checkSourceMessage", null))
             )
-            groups.map { group ->
+            groups.forEach { group ->
                 if (group.contains("失效") && searchView.query.isEmpty()) {
                     searchView.setQuery("失效", true)
                     toastOnUi("发现有失效书源，已为您自动筛选！")

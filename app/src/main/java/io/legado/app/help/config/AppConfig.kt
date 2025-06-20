@@ -6,6 +6,7 @@ import io.legado.app.BuildConfig
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
+import io.legado.app.utils.canvasrecorder.CanvasRecorderFactory
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getPrefLong
@@ -37,7 +38,8 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     var clickActionBR = appCtx.getPrefInt(PreferKey.clickActionBR, 1)
     var themeMode = appCtx.getPrefString(PreferKey.themeMode, "0")
     var useDefaultCover = appCtx.getPrefBoolean(PreferKey.useDefaultCover, false)
-    var optimizeRender = appCtx.getPrefBoolean(PreferKey.optimizeRender, false)
+    var optimizeRender = CanvasRecorderFactory.isSupport
+            && appCtx.getPrefBoolean(PreferKey.optimizeRender, false)
     var recordLog = appCtx.getPrefBoolean(PreferKey.recordLog)
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
@@ -87,8 +89,8 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             PreferKey.useDefaultCover -> useDefaultCover =
                 appCtx.getPrefBoolean(PreferKey.useDefaultCover, false)
 
-            PreferKey.optimizeRender -> optimizeRender =
-                appCtx.getPrefBoolean(PreferKey.optimizeRender, false)
+            PreferKey.optimizeRender -> optimizeRender = CanvasRecorderFactory.isSupport
+                    && appCtx.getPrefBoolean(PreferKey.optimizeRender, false)
 
             PreferKey.recordLog -> recordLog = appCtx.getPrefBoolean(PreferKey.recordLog)
 
@@ -511,6 +513,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val mouseWheelPage
         get() = appCtx.getPrefBoolean(PreferKey.mouseWheelPage, true)
 
+    val paddingDisplayCutouts
+        get() = appCtx.getPrefBoolean(PreferKey.paddingDisplayCutouts, false)
+
     var searchScope: String
         get() = appCtx.getPrefString("searchScope") ?: ""
         set(value) {
@@ -552,6 +557,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefInt(PreferKey.bitmapCacheSize, 50)
         set(value) {
             appCtx.putPrefInt(PreferKey.bitmapCacheSize, value)
+        }
+
+    var imageRetainNum: Int
+        get() = appCtx.getPrefInt(PreferKey.imageRetainNum, 0)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.imageRetainNum, value)
         }
 
     var showReadTitleBarAddition: Boolean
@@ -598,5 +609,90 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.toastOnUi("当前没有配置菜单区域,自动恢复中间区域为菜单.")
         }
     }
+
+    //跳转到漫画界面不使用富文本模式
+    val showMangaUi: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.showMangaUi, true)
+
+    //禁用漫画缩放
+    var disableMangaScale: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.disableMangaScale, true)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.disableMangaScale, value)
+        }
+
+    //漫画预加载数量
+    var mangaPreDownloadNum
+        get() = appCtx.getPrefInt(PreferKey.mangaPreDownloadNum, 10)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.mangaPreDownloadNum, value)
+        }
+
+    //点击翻页
+    var disableClickScroll
+        get() = appCtx.getPrefBoolean(PreferKey.disableClickScroll, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.disableClickScroll, value)
+        }
+
+    //漫画滚动速度
+    var mangaAutoPageSpeed
+        get() = appCtx.getPrefInt(PreferKey.mangaAutoPageSpeed, 3)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.mangaAutoPageSpeed, value)
+        }
+
+    //漫画页脚配置
+    var mangaFooterConfig
+        get() = appCtx.getPrefString(PreferKey.mangaFooterConfig, "")
+        set(value) {
+            appCtx.putPrefString(PreferKey.mangaFooterConfig, value)
+        }
+
+    //漫画水平滚动
+    var enableMangaHorizontalScroll
+        get() = appCtx.getPrefBoolean(PreferKey.enableMangaHorizontalScroll, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.enableMangaHorizontalScroll, value)
+        }
+
+    var mangaColorFilter
+        get() = appCtx.getPrefString(PreferKey.mangaColorFilter, "")
+        set(value) {
+            appCtx.putPrefString(PreferKey.mangaColorFilter, value)
+        }
+
+    //禁用漫画内标题
+    var hideMangaTitle
+        get() = appCtx.getPrefBoolean(PreferKey.hideMangaTitle, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.hideMangaTitle, value)
+        }
+
+    //开启墨水屏模式
+    var enableMangaEInk
+        get() = appCtx.getPrefBoolean(PreferKey.enableMangaEInk, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.enableMangaEInk, value)
+        }
+
+    var mangaEInkThreshold
+        get() = appCtx.getPrefInt(PreferKey.mangaEInkThreshold, 150)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.mangaEInkThreshold, value)
+        }
+
+    var disableHorizontalAnimator
+        get() = appCtx.getPrefBoolean(PreferKey.disableHorizontalAnimator, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.disableHorizontalAnimator, value)
+        }
+
+    var enableMangaGray
+        get() = appCtx.getPrefBoolean(PreferKey.enableMangaGray, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.enableMangaGray, value)
+        }
+
 }
 

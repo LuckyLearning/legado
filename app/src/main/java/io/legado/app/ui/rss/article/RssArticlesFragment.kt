@@ -5,7 +5,9 @@ import android.os.Bundle
 import android.view.View
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -21,11 +23,13 @@ import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.rss.read.ReadRssActivity
 import io.legado.app.ui.widget.recycler.LoadMoreView
 import io.legado.app.ui.widget.recycler.VerticalDivider
+import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
@@ -66,6 +70,7 @@ class RssArticlesFragment() : VMBaseFragment<RssArticlesViewModel>(R.layout.frag
     private fun initView() = binding.run {
         refreshLayout.setColorSchemeColors(accentColor)
         recyclerView.setEdgeEffectColor(primaryColor)
+        recyclerView.applyNavigationBarPadding()
         loadMoreView.setOnClickListener {
             if (!loadMoreView.isLoading) {
                 scrollToBottom(true)
@@ -93,16 +98,19 @@ class RssArticlesFragment() : VMBaseFragment<RssArticlesViewModel>(R.layout.frag
                 }
             }
         })
-        refreshLayout.post {
-            refreshLayout.isRefreshing = true
-            loadArticles()
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                refreshLayout.isRefreshing = true
+                loadArticles()
+                this@launch.cancel()
+            }
         }
     }
 
     private fun initData() {
         val rssUrl = activityViewModel.url ?: return
         articlesFlowJob?.cancel()
-        articlesFlowJob = lifecycleScope.launch {
+        articlesFlowJob = viewLifecycleOwner.lifecycleScope.launch {
             appDb.rssArticleDao.flowByOriginSort(rssUrl, viewModel.sortName).catch {
                 AppLog.put("订阅文章界面获取数据失败\n${it.localizedMessage}", it)
             }.flowOn(IO).collect {

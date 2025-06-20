@@ -31,10 +31,12 @@ import io.legado.app.constant.NotificationId
 import io.legado.app.constant.Status
 import io.legado.app.help.MediaHelp
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.exoplayer.ExoPlayerHelper
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.model.AudioPlay
 import io.legado.app.model.analyzeRule.AnalyzeUrl
+import io.legado.app.model.analyzeRule.AnalyzeUrl.Companion.getMediaItem
 import io.legado.app.receiver.MediaButtonReceiver
 import io.legado.app.ui.book.audio.AudioPlayActivity
 import io.legado.app.utils.activityPendingIntent
@@ -109,6 +111,7 @@ class AudioPlayService : BaseService(),
     private var needResumeOnAudioFocusGain = false
     private var position = AudioPlay.book?.durChapterPos ?: 0
     private var dsJob: Job? = null
+    private var upNotificationJob: Coroutine<*>? = null
     private var upPlayProgressJob: Job? = null
     private var playSpeed: Float = 1f
     private var cover: Bitmap =
@@ -124,15 +127,16 @@ class AudioPlayService : BaseService(),
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PLAYING)
         doDs()
         execute {
-            @Suppress("BlockingMethodInNonBlockingContext")
             ImageLoader
                 .loadBitmap(this@AudioPlayService, AudioPlay.book?.getDisplayCover())
                 .submit()
                 .get()
         }.onSuccess {
-            cover = it
-            upMediaMetadata()
-            upAudioPlayNotification()
+            if (it.width > 16 && it.height > 16) {
+                cover = it
+                upMediaMetadata()
+                upAudioPlayNotification()
+            }
         }
     }
 
@@ -196,6 +200,9 @@ class AudioPlayService : BaseService(),
         AudioPlay.status = Status.STOP
         postEvent(EventBus.AUDIO_STATE, Status.STOP)
         AudioPlay.unregisterService()
+        upNotificationJob?.invokeOnCompletion {
+            notificationManager.cancel(NotificationId.AudioPlayService)
+        }
     }
 
     /**
@@ -220,6 +227,7 @@ class AudioPlayService : BaseService(),
                 source = AudioPlay.bookSource,
                 ruleData = AudioPlay.book,
                 chapter = AudioPlay.durChapter,
+                coroutineContext = coroutineContext
             )
             exoPlayer.setMediaItem(analyzeUrl.getMediaItem())
             exoPlayer.playWhenReady = true
@@ -404,6 +412,8 @@ class AudioPlayService : BaseService(),
                     }
                     if (timeMinute == 0) {
                         AudioPlay.stop()
+                        postEvent(EventBus.AUDIO_DS, timeMinute)
+                        break
                     }
                 }
                 postEvent(EventBus.AUDIO_DS, timeMinute)
@@ -561,6 +571,7 @@ class AudioPlayService : BaseService(),
             .setSmallIcon(R.drawable.ic_volume_up)
             .setSubText(getString(R.string.audio))
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setContentTitle(nTitle)
             .setContentText(nSubtitle)
             .setContentIntent(
@@ -600,7 +611,7 @@ class AudioPlayService : BaseService(),
     }
 
     private fun upAudioPlayNotification() {
-        execute {
+        upNotificationJob = execute {
             try {
                 val notification = createNotification()
                 notificationManager.notify(NotificationId.AudioPlayService, notification.build())

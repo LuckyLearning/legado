@@ -7,10 +7,15 @@ import io.legado.app.base.BaseViewModel
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.RssSource
 import io.legado.app.exception.NoStackTraceException
+import io.legado.app.help.AppCacheManager
 import io.legado.app.help.RuleComplete
 import io.legado.app.help.http.CookieStore
-import io.legado.app.utils.*
-
+import io.legado.app.utils.GSON
+import io.legado.app.utils.fromJsonObject
+import io.legado.app.utils.getClipText
+import io.legado.app.utils.printOnDebug
+import io.legado.app.utils.stackTraceStr
+import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers
 
 
@@ -39,9 +44,11 @@ class RssSourceEditViewModel(application: Application) : BaseViewModel(applicati
             rssSource?.let {
                 appDb.rssSourceDao.delete(it)
                 //更新收藏的源地址
-                if (it.sourceUrl != source.sourceUrl){
+                if (it.sourceUrl != source.sourceUrl) {
                     appDb.rssStarDao.updateOrigin(source.sourceUrl, it.sourceUrl)
                     appDb.rssArticleDao.updateOrigin(source.sourceUrl, it.sourceUrl)
+                    appDb.cacheDao.deleteSourceVariables(it.sourceUrl)
+                    AppCacheManager.clearSourceVariables()
                 }
             }
             appDb.rssSourceDao.insert(source)
