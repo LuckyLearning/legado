@@ -27,6 +27,7 @@ import io.legado.app.R
 import io.legado.app.base.BaseService
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.AppPattern
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.IntentAction
 import io.legado.app.constant.NotificationId
@@ -309,6 +310,10 @@ abstract class BaseReadAloudService : BaseService(),
     @SuppressLint("WakelockTimeout")
     @CallSuper
     open fun resumeReadAloud() {
+        resumeReadAloudInternal()
+    }
+
+    private fun resumeReadAloudInternal() {
         pause = false
         needResumeOnAudioFocusGain = false
         needResumeOnCallStateIdle = false
@@ -326,9 +331,11 @@ abstract class BaseReadAloudService : BaseService(),
     private fun prevP() {
         if (nowSpeak > 0) {
             playStop()
-            nowSpeak--
-            readAloudNumber -= contentList[nowSpeak].length + 1 + paragraphStartPos
-            paragraphStartPos = 0
+            do {
+                nowSpeak--
+                readAloudNumber -= contentList[nowSpeak].length + 1 + paragraphStartPos
+                paragraphStartPos = 0
+            } while (contentList[nowSpeak].matches(AppPattern.notReadAloudRegex))
             textChapter?.let {
                 if (readAloudByPage) {
                     val paragraphs = it.getParagraphs(true)
@@ -358,7 +365,9 @@ abstract class BaseReadAloudService : BaseService(),
                     val paragraphs = it.getParagraphs(true)
                     if (!paragraphs[nowSpeak].isParagraphEnd) readAloudNumber--
                 }
-                if (readAloudNumber >= it.getReadLength(pageIndex + 1)) {
+                if (pageIndex + 1 < it.pageSize
+                    && readAloudNumber >= it.getReadLength(pageIndex + 1)
+                ) {
                     pageIndex++
                     ReadBook.moveToNextPage()
                 }
@@ -672,14 +681,14 @@ abstract class BaseReadAloudService : BaseService(),
 
     open fun prevChapter() {
         toLast = false
+        resumeReadAloudInternal()
         ReadBook.moveToPrevChapter(true, toLast = false)
-        play()
     }
 
     open fun nextChapter() {
         ReadBook.upReadTime()
         AppLog.putDebug("${ReadBook.curTextChapter?.chapter?.title} 朗读结束跳转下一章并朗读")
-        play()
+        resumeReadAloudInternal()
         if (!ReadBook.moveToNextChapter(true)) {
             stopSelf()
         }

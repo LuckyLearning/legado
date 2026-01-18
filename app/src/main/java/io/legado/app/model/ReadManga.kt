@@ -327,21 +327,25 @@ object ReadManga : CoroutineScope by MainScope() {
 
     fun saveRead(pageChanged: Boolean = false) {
         executor.execute {
-            val book = book ?: return@execute
-            book.lastCheckCount = 0
-            book.durChapterTime = System.currentTimeMillis()
-            val chapterChanged = book.durChapterIndex != durChapterIndex
-            book.durChapterIndex = durChapterIndex
-            book.durChapterPos = durChapterPos
-            if (!pageChanged || chapterChanged) {
-                appDb.bookChapterDao.getChapter(book.bookUrl, durChapterIndex)?.let {
-                    book.durChapterTitle = it.getDisplayTitle(
-                        ContentProcessor.get(book.name, book.origin).getTitleReplaceRules(),
-                        book.getUseReplaceRule()
-                    )
+            kotlin.runCatching {
+                val book = book ?: return@execute
+                book.lastCheckCount = 0
+                book.durChapterTime = System.currentTimeMillis()
+                val chapterChanged = book.durChapterIndex != durChapterIndex
+                book.durChapterIndex = durChapterIndex
+                book.durChapterPos = durChapterPos
+                if (!pageChanged || chapterChanged) {
+                    appDb.bookChapterDao.getChapter(book.bookUrl, durChapterIndex)?.let {
+                        book.durChapterTitle = it.getDisplayTitle(
+                            ContentProcessor.get(book.name, book.origin).getTitleReplaceRules(),
+                            book.getUseReplaceRule()
+                        )
+                    }
                 }
+                appDb.bookDao.update(book)
+            }.onFailure {
+                AppLog.put("保存漫画阅读进度信息出错\n$it", it)
             }
-            appDb.bookDao.update(book)
         }
     }
 
@@ -478,10 +482,11 @@ object ReadManga : CoroutineScope by MainScope() {
     fun uploadProgress(successAction: (() -> Unit)? = null) {
         book?.let {
             launch(IO) {
-                AppWebDav.uploadBookProgress(it)
+                AppWebDav.uploadBookProgress(it) {
+                    successAction?.invoke()
+                }
                 ensureActive()
                 it.update()
-                successAction?.invoke()
             }
         }
     }
@@ -542,6 +547,10 @@ object ReadManga : CoroutineScope by MainScope() {
 
     fun showLoading() {
         mCallback?.showLoading()
+    }
+
+    fun loadFail(msg: String, retry: Boolean = true) {
+        mCallback?.loadFail(msg, retry)
     }
 
     fun onChapterListUpdated(newBook: Book) {
@@ -617,7 +626,7 @@ object ReadManga : CoroutineScope by MainScope() {
 
     interface Callback {
         fun upContent()
-        fun loadFail(msg: String)
+        fun loadFail(msg: String, retry: Boolean = true)
         fun sureNewProgress(progress: BookProgress)
         fun showLoading()
         fun startLoad()

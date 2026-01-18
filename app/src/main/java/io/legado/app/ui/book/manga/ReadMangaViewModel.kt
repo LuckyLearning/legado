@@ -54,7 +54,10 @@ class ReadMangaViewModel(application: Application) : BaseViewModel(application) 
             } ?: ReadManga.book
             when {
                 book != null -> initManga(book)
-                else -> context.getString(R.string.no_book)//没有找到书
+                else -> {
+                    ReadManga.loadFail(context.getString(R.string.no_book), false)
+                    AppLog.put("未找到漫画书籍\nbookUrl:$bookUrl")
+                }
             }
         }.onSuccess {
             success?.invoke()
@@ -118,7 +121,7 @@ class ReadMangaViewModel(application: Application) : BaseViewModel(application) 
                 if (oldBook.bookUrl == book.bookUrl) {
                     appDb.bookDao.update(book)
                 } else {
-                    appDb.bookDao.insert(book)
+                    appDb.bookDao.replace(oldBook, book)
                     BookHelp.updateCacheFolder(oldBook, book)
                 }
                 appDb.bookChapterDao.delByBook(oldBook.bookUrl)

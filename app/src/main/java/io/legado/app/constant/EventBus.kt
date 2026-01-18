@@ -21,6 +21,7 @@ object EventBus {
     const val NOTIFY_MAIN = "notifyMain"
     const val WEB_SERVICE = "webService"
     const val UP_DOWNLOAD = "upDownload"
+    const val UP_DOWNLOAD_STATE = "upDownloadState"
     const val SAVE_CONTENT = "saveContent"
     const val CHECK_SOURCE = "checkSource"
     const val CHECK_SOURCE_DONE = "checkSourceDone"
@@ -32,4 +33,5 @@ object EventBus {
     const val READ_ALOUD_PLAY = "readAloudPlay"
     const val EXPORT_BOOK = "exportBook"
     const val UP_MANGA_CONFIG = "upMangaConfig"
+    const val PLAY_MODE_CHANGED = "playModeChanged"
 }
