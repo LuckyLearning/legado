@@ -48,15 +48,25 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
         // 提取版本号
         val versionRegex = Regex("<span class=\"text-bold\">([^<]+)</span>")
         val versionMatch = versionRegex.find(html)
-        val versionName = versionMatch?.groupValues?.get(1) ?: throw NoStackTraceException("未找到版本信息")
+        val version = versionMatch?.groupValues?.get(1) ?: throw NoStackTraceException("未找到版本信息")
         
         // 提取发布时间
         val dateRegex = Regex("<relative-time datetime=\"([^\"]+)\">")
         val dateMatch = dateRegex.find(html)
-        val createdAt = dateMatch?.groupValues?.get(1) ?: ""
+        val createdAtStr = dateMatch?.groupValues?.get(1) ?: ""
+        val createdAt = if (createdAtStr.isNotEmpty()) {
+            try {
+                val instant = java.time.Instant.parse(createdAtStr)
+                instant.toEpochMilli()
+            } catch (e: Exception) {
+                System.currentTimeMillis()
+            }
+        } else {
+            System.currentTimeMillis()
+        }
         
         // 提取更新日志
-        val changelogRegex = Regex("<div class=\"Box-body\"[^>]*>([\s\S]+?)</div>")
+        val changelogRegex = Regex("<div class=\"Box-body\"[^>]*>([\\s\\S]+?)</div>")
         val changelogMatch = changelogRegex.find(html)
         val note = changelogMatch?.groupValues?.get(1)?.replace(Regex("<[^>]+>"), "")?.trim() ?: ""
         
@@ -79,12 +89,12 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
             
             releaseInfos.add(
                 AppReleaseInfo(
-                    versionName = versionName,
-                    name = fileName,
-                    note = note,
-                    downloadUrl = downloadUrl,
+                    appVariant = appVariant,
                     createdAt = createdAt,
-                    appVariant = appVariant
+                    note = note,
+                    name = fileName,
+                    downloadUrl = downloadUrl,
+                    assetUrl = downloadUrl // 使用下载链接作为 assetUrl
                 )
             )
         }
