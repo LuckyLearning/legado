@@ -25,27 +25,75 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
         }
 
     private suspend fun getLatestRelease(): List<AppReleaseInfo> {
-        val lastReleaseUrl = if (checkVariant.isBeta()) {
-            "https://api.github.com/repos/LuckyLearning/legado/releases/tags/beta"
-        } else {
-            "https://api.github.com/repos/LuckyLearning/legado/releases/latest"
-        }
+        val releasePageUrl = "https://github.com/LuckyLearning/legado/releases/latest"
+        
         val res = okHttpClient.newCallResponse {
-            url(lastReleaseUrl)
+            url(releasePageUrl)
         }
+        
         if (!res.isSuccessful) {
             throw NoStackTraceException("获取新版本出错(${res.code})")
         }
+        
         val body = res.body.text()
         if (body.isBlank()) {
             throw NoStackTraceException("获取新版本出错")
         }
-        return GSON.fromJsonObject<GithubRelease>(body)
-            .getOrElse {
-                throw NoStackTraceException("获取新版本出错 " + it.localizedMessage)
+        
+        // 解析 HTML 页面获取版本信息
+        return parseReleasePage(body)
+    }
+    
+    private fun parseReleasePage(html: String): List<AppReleaseInfo> {
+        // 提取版本号
+        val versionRegex = Regex("<span class=\"text-bold\">([^<]+)</span>")
+        val versionMatch = versionRegex.find(html)
+        val versionName = versionMatch?.groupValues?.get(1) ?: throw NoStackTraceException("未找到版本信息")
+        
+        // 提取发布时间
+        val dateRegex = Regex("<relative-time datetime=\"([^\"]+)\">")
+        val dateMatch = dateRegex.find(html)
+        val createdAt = dateMatch?.groupValues?.get(1) ?: ""
+        
+        // 提取更新日志
+        val changelogRegex = Regex("<div class=\"Box-body\"[^>]*>([\s\S]+?)</div>")
+        val changelogMatch = changelogRegex.find(html)
+        val note = changelogMatch?.groupValues?.get(1)?.replace(Regex("<[^>]+>"), "")?.trim() ?: ""
+        
+        // 提取下载链接
+        val downloadRegex = Regex("<a href=\"(/LuckyLearning/legado/releases/download/[^\"]+\\.apk)\"[^>]*>")
+        val downloadMatches = downloadRegex.findAll(html)
+        
+        val releaseInfos = mutableListOf<AppReleaseInfo>()
+        
+        downloadMatches.forEach { match ->
+            val downloadUrl = "https://github.com" + match.groupValues[1]
+            val fileName = downloadUrl.substringAfterLast("/")
+            
+            // 确定应用变体
+            val appVariant = when {
+                fileName.contains("beta") -> AppVariant.BETA_RELEASE
+                fileName.contains("betaA") -> AppVariant.BETA_RELEASEA
+                else -> AppVariant.OFFICIAL
             }
-            .gitReleaseToAppReleaseInfo()
-            .sortedByDescending { it.createdAt }
+            
+            releaseInfos.add(
+                AppReleaseInfo(
+                    versionName = versionName,
+                    name = fileName,
+                    note = note,
+                    downloadUrl = downloadUrl,
+                    createdAt = createdAt,
+                    appVariant = appVariant
+                )
+            )
+        }
+        
+        if (releaseInfos.isEmpty()) {
+            throw NoStackTraceException("未找到下载链接")
+        }
+        
+        return releaseInfos.sortedByDescending { it.createdAt }
     }
 
     override fun check(
