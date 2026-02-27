@@ -27,7 +27,7 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
     private suspend fun getLatestRelease(): List<AppReleaseInfo> {
         // 首先尝试使用 GitHub API
         try {
-            val lastReleaseUrl = "https://github.com/LuckyLearning/legado/releases/latest"
+            val lastReleaseUrl = "https://api.github.com/repos/LuckyLearning/legado/releases/latest"
             
             val res = okHttpClient.newCallResponse {
                 url(lastReleaseUrl)
