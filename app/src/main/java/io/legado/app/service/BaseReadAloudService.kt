@@ -694,8 +694,12 @@ abstract class BaseReadAloudService : BaseService(),
         }
     }
 
+    /**
+     * 初始化电话状态监听器
+     * 只有当用户明确开启来电暂停功能时才注册监听器并请求 READ_PHONE_STATE 权限
+     */
     private fun initPhoneStateListener() {
-        val needRegister = AppConfig.ignoreAudioFocus && AppConfig.pauseReadAloudWhilePhoneCalls
+        val needRegister = AppConfig.pauseReadAloudWhilePhoneCalls
         if (needRegister && registeredPhoneStateListener) {
             return
         }

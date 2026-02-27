@@ -9,6 +9,7 @@ import io.legado.app.databinding.DialogUpdateBinding
 import io.legado.app.help.update.AppUpdate
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.model.Download
+import io.legado.app.utils.openUrl
 import io.legado.app.utils.setLayout
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -61,6 +62,12 @@ class UpdateDialog() : BaseDialogFragment(R.layout.dialog_update) {
                     if (url != null && name != null) {
                         Download.start(requireContext(), url, name)
                         toastOnUi(R.string.download_start)
+                    }
+                }
+                R.id.menu_browser_download -> {
+                    val url = arguments?.getString("url")
+                    if (url != null) {
+                        requireContext().openUrl(url)
                     }
                 }
             }

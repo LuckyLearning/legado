@@ -7,4 +7,9 @@
         android:title="@string/action_download"
         app:showAsAction="always" />
 
+    <item
+        android:id="@+id/menu_browser_download"
+        android:title="@string/open_in_browser"
+        app:showAsAction="never" />
+
 </menu>

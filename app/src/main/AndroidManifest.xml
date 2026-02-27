@@ -2,23 +2,37 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- 网络权限：用于获取网络书籍内容、检查更新 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 唤醒锁：朗读时保持屏幕唤醒 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 电话状态：来电时暂停朗读（可选功能，需用户开启） -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- 网络状态：检测网络连接状态 -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- WiFi状态：检测WiFi连接状态 -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- 前台服务：支持后台服务运行 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- 电池优化白名单：防止后台服务被系统杀死 -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
+    <!-- 音频设置：控制音频播放 -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- 通知权限：Android 13+ 显示通知 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 安装应用：应用内更新安装APK -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- 存储管理：Android 11+ 全文件访问（导入本地书籍） -->
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
+    <!-- 存储读取：读取本地书籍文件 -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- 存储写入：导出文件、备份恢复 -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <!-- 前台服务类型-媒体播放：朗读/音频播放服务 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- 前台服务类型-数据同步：缓存/下载/同步服务 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
