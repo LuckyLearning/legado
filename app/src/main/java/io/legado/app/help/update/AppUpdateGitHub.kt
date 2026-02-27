@@ -25,83 +25,76 @@ object AppUpdateGitHub : AppUpdate.AppUpdateInterface {
         }
 
     private suspend fun getLatestRelease(): List<AppReleaseInfo> {
+        // 首先尝试使用 GitHub API
+        try {
+            val releasePageUrl = "https://github.com/LuckyLearning/legado/releases/latest"
+            
+            val res = okHttpClient.newCallResponse {
+                url(lastReleaseUrl)
+                header("Accept", "application/vnd.github.v3+json")
+            }
+            
+            if (res.isSuccessful) {
+                val body = res.body.text()
+                if (body.isBlank()) {
+                    throw NoStackTraceException("获取新版本出错")
+                }
+                return GSON.fromJsonObject<GithubRelease>(body)
+                    .getOrElse {
+                        throw NoStackTraceException("获取新版本出错 " + it.localizedMessage)
+                    }
+                    .gitReleaseToAppReleaseInfo()
+                    .sortedByDescending { it.createdAt }
+            }
+        } catch (e: Exception) {
+            // API 请求失败，尝试从 HTML 页面获取
+        }
+        
+        // 从 HTML 页面获取版本信息
+        return getLatestReleaseFromHtml()
+    }
+    
+    private suspend fun getLatestReleaseFromHtml(): List<AppReleaseInfo> {
         val releasePageUrl = "https://github.com/LuckyLearning/legado/releases/latest"
         
         val res = okHttpClient.newCallResponse {
             url(releasePageUrl)
+            header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
         }
         
         if (!res.isSuccessful) {
             throw NoStackTraceException("获取新版本出错(${res.code})")
         }
         
-        val body = res.body.text()
-        if (body.isBlank()) {
-            throw NoStackTraceException("获取新版本出错")
-        }
-        
-        // 解析 HTML 页面获取版本信息
-        return parseReleasePage(body)
-    }
-    
-    private fun parseReleasePage(html: String): List<AppReleaseInfo> {
-        // 提取版本号
-        val versionRegex = Regex("<span class=\"text-bold\">([^<]+)</span>")
-        val versionMatch = versionRegex.find(html)
+        // 从重定向后的 URL 中提取版本号
+        val finalUrl = res.request.url.toString()
+        val versionRegex = Regex("tag/([^/]+)")
+        val versionMatch = versionRegex.find(finalUrl)
         val version = versionMatch?.groupValues?.get(1) ?: throw NoStackTraceException("未找到版本信息")
-        
-        // 提取发布时间
-        val dateRegex = Regex("<relative-time datetime=\"([^\"]+)\">")
-        val dateMatch = dateRegex.find(html)
-        val createdAtStr = dateMatch?.groupValues?.get(1) ?: ""
-        val createdAt = if (createdAtStr.isNotEmpty()) {
-            try {
-                val instant = java.time.Instant.parse(createdAtStr)
-                instant.toEpochMilli()
-            } catch (e: Exception) {
-                System.currentTimeMillis()
-            }
-        } else {
-            System.currentTimeMillis()
-        }
-        
-        // 提取更新日志
-        val changelogRegex = Regex("<div class=\"Box-body\"[^>]*>([\\s\\S]+?)</div>")
-        val changelogMatch = changelogRegex.find(html)
-        val note = changelogMatch?.groupValues?.get(1)?.replace(Regex("<[^>]+>"), "")?.trim() ?: ""
-        
-        // 提取下载链接
-        val downloadRegex = Regex("<a href=\"(/LuckyLearning/legado/releases/download/[^\"]+\\.apk)\"[^>]*>")
-        val downloadMatches = downloadRegex.findAll(html)
         
         val releaseInfos = mutableListOf<AppReleaseInfo>()
         
-        downloadMatches.forEach { match ->
-            val downloadUrl = "https://github.com" + match.groupValues[1]
-            val fileName = downloadUrl.substringAfterLast("/")
-            
-            // 确定应用变体
-            val appVariant = when {
-                fileName.contains("beta") -> AppVariant.BETA_RELEASE
-                fileName.contains("betaA") -> AppVariant.BETA_RELEASEA
-                else -> AppVariant.OFFICIAL
-            }
-            
-            releaseInfos.add(
-                AppReleaseInfo(
-                    appVariant = appVariant,
-                    createdAt = createdAt,
-                    note = note,
-                    name = fileName,
-                    downloadUrl = downloadUrl,
-                    assetUrl = downloadUrl // 使用下载链接作为 assetUrl
-                )
-            )
+        // 构建 APK 下载链接
+        val downloadUrl = "https://github.com/LuckyLearning/legado/releases/download/$version/legado_app_$version.apk"
+        val fileName = "legado_app_$version.apk"
+        
+        // 确定应用变体
+        val appVariant = when {
+            fileName.contains("beta") -> AppVariant.BETA_RELEASE
+            fileName.contains("betaA") -> AppVariant.BETA_RELEASEA
+            else -> AppVariant.OFFICIAL
         }
         
-        if (releaseInfos.isEmpty()) {
-            throw NoStackTraceException("未找到下载链接")
-        }
+        releaseInfos.add(
+            AppReleaseInfo(
+                appVariant = appVariant,
+                createdAt = System.currentTimeMillis(),
+                note = "",
+                name = fileName,
+                downloadUrl = downloadUrl,
+                assetUrl = downloadUrl // 使用下载链接作为 assetUrl
+            )
+        )
         
         return releaseInfos.sortedByDescending { it.createdAt }
     }
